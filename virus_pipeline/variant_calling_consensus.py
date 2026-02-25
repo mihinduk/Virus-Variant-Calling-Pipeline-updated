@@ -98,11 +98,13 @@ def add_read_groups(bam_file, sample_name, output_dir):
 def run_variant_calling(bam_file, reference_fasta, sample_name, output_dir):
     validate_bam(bam_file)
     raw_vcf = os.path.join(output_dir, f"{sample_name}.vcf")
+    # Fix 3: Added -ploidy 1 for haploid virus genome
     gatk_command = (
         f"gatk HaplotypeCaller "
         f"-R {reference_fasta} "
         f"-I {bam_file} "
         f"-O {raw_vcf} "
+        f"-ploidy 1 "
         f"--standard-min-confidence-threshold-for-calling 30 "
         f"--min-base-quality-score 20"
     )
@@ -110,6 +112,59 @@ def run_variant_calling(bam_file, reference_fasta, sample_name, output_dir):
     logging.info(f"GATK HaplotypeCaller output: {stdout}")
     logging.info(f"GATK HaplotypeCaller error: {stderr}")
     return raw_vcf
+
+def filter_vcf(raw_vcf, reference_fasta, sample_name, output_dir):
+    """Fix 4: Filter VCF for quality, depth, and strand bias."""
+    filtered_vcf = os.path.join(output_dir, f"{sample_name}_filtered.vcf")
+    filter_command = (
+        f"gatk VariantFiltration "
+        f"-R {reference_fasta} "
+        f"-V {raw_vcf} "
+        f"--filter-expression 'QD < 2.0' --filter-name 'LowQD' "
+        f"--filter-expression 'FS > 60.0' --filter-name 'StrandBias' "
+        f"--filter-expression 'MQ < 40.0' --filter-name 'LowMQ' "
+        f"--filter-expression 'DP < 10' --filter-name 'LowDepth' "
+        f"-O {filtered_vcf}"
+    )
+    run_command(filter_command)
+
+    # Select only PASS variants
+    pass_vcf = os.path.join(output_dir, f"{sample_name}_pass.vcf")
+    select_command = (
+        f"gatk SelectVariants "
+        f"-R {reference_fasta} "
+        f"-V {filtered_vcf} "
+        f"--exclude-filtered "
+        f"-O {pass_vcf}"
+    )
+    run_command(select_command)
+    logging.info(f"VCF filtering complete: {pass_vcf}")
+    return pass_vcf
+
+def trim_primers(bam_file, primer_bed, sample_name, output_dir):
+    """Fix 7: Trim primer sequences from aligned reads using ivar trim."""
+    trimmed_prefix = os.path.join(output_dir, f"{sample_name}_trimmed")
+    trimmed_bam = f"{trimmed_prefix}.bam"
+    trimmed_sorted = os.path.join(output_dir, f"{sample_name}_trimmed.sorted.bam")
+
+    trim_command = (
+        f"ivar trim -b {primer_bed} "
+        f"-p {trimmed_prefix} "
+        f"-i {bam_file} "
+        f"-q 20 -m 30 -s 4 -e"
+    )
+    run_command(trim_command)
+
+    # Sort and index the trimmed BAM
+    run_command(f"samtools sort -o {trimmed_sorted} {trimmed_bam}")
+    run_command(f"samtools index {trimmed_sorted}")
+
+    # Clean up unsorted trimmed BAM
+    if os.path.exists(trimmed_bam):
+        os.remove(trimmed_bam)
+
+    logging.info(f"Primer trimming complete: {trimmed_sorted}")
+    return trimmed_sorted
 
 def run_snpeff_annotation(raw_vcf, sample_name, output_dir, reference_name="denv1"):
     annotated_vcf = os.path.join(output_dir, f"{sample_name}_annotated.vcf")
@@ -151,12 +206,24 @@ def main(argv=None):
     parser.add_argument('--reference_fasta', type=str, help='Path to reference FASTA file.')
     parser.add_argument('--output_dir', type=str, help='Path to output directory for consensus FASTA and VCF files.')
     parser.add_argument('--database_name', type=str, default="denv1", help='Name of the SnpEff database (default: denv1).')
+    parser.add_argument('--primer_bed', type=str, default=None,
+                        help='BED file with primer coordinates for ivar trim (Fix 7). '
+                             'If not provided, primer trimming is skipped.')
     args = parser.parse_args(argv)
 
     input_dir = args.input_dir
     reference_fasta = args.reference_fasta
     output_dir = args.output_dir
     database_name = args.database_name
+    primer_bed = args.primer_bed
+
+    if primer_bed and not os.path.exists(primer_bed):
+        logging.error(f"Primer BED file not found: {primer_bed}")
+        sys.exit(1)
+    if primer_bed:
+        logging.info(f"Primer trimming enabled with BED file: {primer_bed}")
+    else:
+        logging.warning("No primer BED file provided -- skipping primer trimming (Fix 7)")
     
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -172,28 +239,52 @@ def main(argv=None):
         print("Processing:", bam_file)
         sample_name = os.path.splitext(os.path.basename(bam_file))[0].replace('.sorted', '')
         try:
-            rg_bam = add_read_groups(bam_file, sample_name, output_dir)
-
-        
             # Add read groups before GATK
             rg_bam = add_read_groups(bam_file, sample_name, output_dir)
+
+            # Fix 7: Primer trimming (if BED file provided)
+            analysis_bam = rg_bam
+            if primer_bed:
+                analysis_bam = trim_primers(rg_bam, primer_bed, sample_name, output_dir)
+
+            # Coverage calculation with quality filters (Fix 5 continued)
             coverage_file = os.path.join(output_dir, f"{sample_name}_coverage.txt")
-            coverage_qual_file = os.path.join(output_dir, f"{sample_name}_qual.txt")
-            coverage_command = f"samtools depth {rg_bam} > {coverage_file} && samtools depth -Q 20 {rg_bam} > {coverage_qual_file}"
+            coverage_command = (
+                f"samtools depth -q 20 -Q 20 {analysis_bam} > {coverage_file}"
+            )
             stdout, stderr = run_command(coverage_command)
             logging.info(f"Coverage command output: {stdout}")
             logging.info(f"Coverage command error: {stderr}")
             plot_coverage(coverage_file, output_dir)
-            pileup_command = f"samtools mpileup -d 1000 -A -Q 0 {rg_bam} | ivar consensus -p {sample_name} -q 20 -t 0"
+
+            # Fix 6: ivar consensus with majority-rule threshold and minimum depth
+            pileup_command = (
+                f"samtools mpileup -d 10000 -Q 20 -q 20 "
+                f"{analysis_bam} | "
+                f"ivar consensus -p {sample_name} -q 20 -t 0.5 -m 10 -n N"
+            )
             stdout, stderr = run_command(pileup_command)
             logging.info(f"Consensus command output: {stdout}")
             logging.info(f"Consensus command error: {stderr}")
             consensus_fasta = f"{sample_name}.fa"
             os.rename(consensus_fasta, os.path.join(output_dir, consensus_fasta))
-            raw_vcf = run_variant_calling(rg_bam, reference_fasta, sample_name, output_dir)
-            annotated_vcf, summary_html, summary_csv, summary_txt = run_snpeff_annotation(raw_vcf, sample_name, output_dir, database_name)
+
+            # Variant calling (Fix 3: ploidy=1 applied inside function)
+            raw_vcf = run_variant_calling(analysis_bam, reference_fasta, sample_name, output_dir)
+
+            # Fix 4: VCF filtering before annotation
+            filtered_vcf = filter_vcf(raw_vcf, reference_fasta, sample_name, output_dir)
+
+            # Annotate filtered variants
+            annotated_vcf, summary_html, summary_csv, summary_txt = run_snpeff_annotation(
+                filtered_vcf, sample_name, output_dir, database_name)
             snpsift_output = run_snpsift_extract(annotated_vcf, sample_name, output_dir)
-            logging.info(f"Consensus sequence, coverage file, coverage plot, annotated VCF, SnpEff reports, and SnpSift output: {os.path.join(output_dir, consensus_fasta)}, {coverage_file}, {raw_vcf}, {annotated_vcf}, {summary_html}, {summary_csv}, {summary_txt}, {snpsift_output}")
+            logging.info(
+                f"Processing complete for {sample_name}: "
+                f"consensus={os.path.join(output_dir, consensus_fasta)}, "
+                f"coverage={coverage_file}, filtered_vcf={filtered_vcf}, "
+                f"annotated_vcf={annotated_vcf}"
+            )
         except Exception as e:
             print(f"Error occurred during processing {sample_name}: {str(e)}")
             continue

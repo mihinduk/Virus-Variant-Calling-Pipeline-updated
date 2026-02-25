@@ -50,23 +50,45 @@ def main(argv=None):
         logging.info(f"Processing: {sam_file}")
         sample_name = os.path.splitext(os.path.basename(sam_file))[0].replace('_aln', '')
 
-        # Convert SAM to BAM
+        # Convert SAM to BAM with MAPQ and flag filtering (Fix 5)
+        # -q 20: minimum mapping quality 20
+        # -F 0x904: exclude unmapped (0x4), secondary (0x100), supplementary (0x800)
         bam_file = os.path.join(output_dir, f"{sample_name}.bam")
-        sam_to_bam_command = f"samtools view -S -b -T {reference_fasta} {sam_file} > {bam_file}"
+        sam_to_bam_command = (
+            f"samtools view -S -b -T {reference_fasta} "
+            f"-q 20 -F 0x904 "
+            f"{sam_file} > {bam_file}"
+        )
         run_command(sam_to_bam_command)
         validate_bam(bam_file)
 
+        # Add mate information for duplicate marking (Fix 2)
+        fixmate_bam = os.path.join(output_dir, f"{sample_name}.fixmate.bam")
+        fixmate_command = f"samtools fixmate -m {bam_file} {fixmate_bam}"
+        run_command(fixmate_command)
+
         # Sort BAM file
         sorted_bam_file = os.path.join(output_dir, f"{sample_name}.sorted.bam")
-        sort_command = f"samtools sort -T {os.path.join(output_dir, f'temp_{sample_name}')} -o {sorted_bam_file} {bam_file}"
+        sort_command = f"samtools sort -T {os.path.join(output_dir, f'temp_{sample_name}')} -o {sorted_bam_file} {fixmate_bam}"
         run_command(sort_command)
+
+        # Mark and remove duplicates (Fix 2)
+        dedup_bam = os.path.join(output_dir, f"{sample_name}.dedup.bam")
+        markdup_command = f"samtools markdup -r -s {sorted_bam_file} {dedup_bam}"
+        run_command(markdup_command)
+        os.rename(dedup_bam, sorted_bam_file)
         validate_bam(sorted_bam_file)
 
         # Index BAM file
         index_command = f"samtools index {sorted_bam_file}"
         run_command(index_command)
 
-        logging.info(f"Sorted BAM file generated and indexed: {sorted_bam_file}")
+        # Clean up intermediate files
+        for tmp in [bam_file, fixmate_bam]:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+
+        logging.info(f"Sorted, deduplicated BAM file generated and indexed: {sorted_bam_file}")
 
 if __name__ == '__main__':
     main()

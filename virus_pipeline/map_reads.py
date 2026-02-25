@@ -55,10 +55,28 @@ def main(argv=None):
         sample_folder = os.path.join(base_dir, f"{sample_name}_output")
         os.makedirs(sample_folder, exist_ok=True)
 
-        # fastp
-        trimmomatic_command = f"fastp -i {read1} -I {read2} -o {os.path.join(sample_folder, f'{sample_name}_trimmed_R1.fastq.gz')} -O {os.path.join(sample_folder, f'{sample_name}_trimmed_R2.fastq.gz')}"
+        # fastp with explicit quality parameters
+        trimmed_r1 = os.path.join(sample_folder, f'{sample_name}_trimmed_R1.fastq.gz')
+        trimmed_r2 = os.path.join(sample_folder, f'{sample_name}_trimmed_R2.fastq.gz')
+        fastp_json = os.path.join(sample_folder, f'{sample_name}_fastp.json')
+        fastp_html = os.path.join(sample_folder, f'{sample_name}_fastp.html')
+        fastp_command = (
+            f"fastp -i {read1} -I {read2} "
+            f"-o {trimmed_r1} -O {trimmed_r2} "
+            f"--qualified_quality_phred 20 "
+            f"--length_required 50 "
+            f"--cut_front --cut_tail "
+            f"--cut_window_size 4 "
+            f"--cut_mean_quality 20 "
+            f"--detect_adapter_for_pe "
+            f"--correction "
+            f"--overlap_len_require 30 "
+            f"--json {fastp_json} "
+            f"--html {fastp_html} "
+            f"--thread 4"
+        )
         logging.info(f"Running fastp for sample {sample_name}...")
-        stdout, stderr = run_command(trimmomatic_command)
+        stdout, stderr = run_command(fastp_command)
         logging.info(stdout)
         logging.info(stderr)  
 

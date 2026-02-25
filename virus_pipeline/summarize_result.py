@@ -8,10 +8,21 @@ pd.set_option('future.no_silent_downcasting', True)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def summarize_coverage(input_dir, output_file):
-    sample_names = []
-    average_coverage = []
+    """Fix 8: Comprehensive coverage metrics instead of average-only."""
+    import numpy as np
 
-    for file_name in os.listdir(input_dir):
+    sample_names = []
+    avg_cov = []
+    median_cov = []
+    min_cov = []
+    max_cov = []
+    std_cov = []
+    pct_1x = []
+    pct_10x = []
+    pct_30x = []
+    pct_100x = []
+
+    for file_name in sorted(os.listdir(input_dir)):
         if file_name.endswith('_coverage.txt'):
             coverage_file = os.path.join(input_dir, file_name)
             sample_name = file_name.replace('_coverage.txt', '')
@@ -25,16 +36,38 @@ def summarize_coverage(input_dir, output_file):
                         depth = int(columns[2])
                         coverage_values.append(depth)
                 if coverage_values:
-                    average_coverage.append(sum(coverage_values) / len(coverage_values))
+                    arr = np.array(coverage_values)
+                    total = len(arr)
+                    avg_cov.append(round(float(np.mean(arr)), 2))
+                    median_cov.append(round(float(np.median(arr)), 2))
+                    min_cov.append(int(np.min(arr)))
+                    max_cov.append(int(np.max(arr)))
+                    std_cov.append(round(float(np.std(arr)), 2))
+                    pct_1x.append(round(float(np.sum(arr >= 1)) / total * 100, 2))
+                    pct_10x.append(round(float(np.sum(arr >= 10)) / total * 100, 2))
+                    pct_30x.append(round(float(np.sum(arr >= 30)) / total * 100, 2))
+                    pct_100x.append(round(float(np.sum(arr >= 100)) / total * 100, 2))
                 else:
-                    average_coverage.append(0)
+                    for lst in [avg_cov, median_cov, min_cov, max_cov, std_cov,
+                                pct_1x, pct_10x, pct_30x, pct_100x]:
+                        lst.append(0)
             except Exception as e:
                 logging.error(f"Error processing coverage file {coverage_file}: {e}")
-                average_coverage.append(0)
+                for lst in [avg_cov, median_cov, min_cov, max_cov, std_cov,
+                            pct_1x, pct_10x, pct_30x, pct_100x]:
+                    lst.append(0)
 
     coverage_data = {
         'Sample': sample_names,
-        'Average Coverage': average_coverage,
+        'Average_Coverage': avg_cov,
+        'Median_Coverage': median_cov,
+        'Min_Coverage': min_cov,
+        'Max_Coverage': max_cov,
+        'Std_Coverage': std_cov,
+        'Pct_Genome_1x': pct_1x,
+        'Pct_Genome_10x': pct_10x,
+        'Pct_Genome_30x': pct_30x,
+        'Pct_Genome_100x': pct_100x,
     }
     coverage_df = pd.DataFrame(coverage_data)
     coverage_df.to_excel(output_file, index=False)
