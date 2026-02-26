@@ -13,40 +13,40 @@ graph TD
 
     %% Step 1: Initialization
     subgraph S1 ["1. Initialization"]
-        SS[Create Sample Sheet <br/> <i>create_samplesheet.py</i>]
+        SS[Create Sample Sheet - create_samplesheet.py]
     end
 
     %% Step 2: Quality Control & Mapping
     subgraph S2 ["2. QC, Trimming & Mapping"]
-        FASTQC1[Read QC <br/> <i>FastQC</i>]
-        FASTP[Read Trimming & Quality Filtering <br/> <i>fastp</i>]
-        BWA[Map Reads to Reference <br/> <i>bwa-mem2</i>]
+        FASTQC1[Read QC - FastQC]
+        FASTP[Read Trimming and Quality Filtering - fastp]
+        BWA[Map Reads to Reference - bwa-mem2]
     end
 
     %% Step 3: Alignment Processing
     subgraph S3 ["3. Alignment Processing & Filtering"]
-        SAMBAM[Convert SAM to BAM <br/> <i>samtools</i>]
-        SORT[Sort & Index <br/> <i>samtools</i>]
-        ALIGN_FILT[Alignment Filtering & Deduplication]
-        PRIMER[Amplicon Primer Trimming <br/> <i>iVar</i>]
+        SAMBAM[Convert SAM to BAM - samtools]
+        SORT[Sort and Index - samtools]
+        ALIGN_FILT[Alignment Filtering and Deduplication]
+        PRIMER[Amplicon Primer Trimming - iVar]
     end
 
-    %% Step 4: Annotation Database
+    %% Step 4: Database Creation
     subgraph S4 ["4. Annotation Database"]
-        SNPEFF_DB[Build SnpEff Database <br/> <i>create_snpeff_database.py</i>]
+        SNPEFF_DB[Build SnpEff Database - create_snpeff_database.py]
     end
 
     %% Step 5: Variant Calling & Consensus
     subgraph S5 ["5. Variant Calling & Consensus"]
-        GATK[Variant Calling <br/> <i>GATK & iVar</i> <br/> (Viral Ploidy Enforced)]
+        GATK[Variant Calling - GATK and iVar - Viral Ploidy Enforced]
         VAR_FILT[Variant Quality Filtering]
         CONSENSUS[Generate Consensus Sequence]
     end
 
     %% Step 6: Summarization
     subgraph S6 ["6. Annotation & Summarization"]
-        ANNOTATE[Annotate Variants <br/> <i>SnpEff / SnpSift</i>]
-        SUMMARIZE[Summarize Results & Provenance <br/> <i>summarize_result.py</i>]
+        ANNOTATE[Annotate Variants - SnpEff / SnpSift]
+        SUMMARIZE[Summarize Results and Provenance - summarize_result.py]
     end
 
     %% Outputs
