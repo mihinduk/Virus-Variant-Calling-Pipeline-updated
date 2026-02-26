@@ -2,6 +2,99 @@
 
 This pipeline processes paired-end FASTQ files to perform variant calling and generate consensus sequences for viral genomes, specifically designed for Dengue virus (DENV1). It uses a series of bioinformatics tools to map reads, convert SAM to BAM, call variants, annotate them with SnpEff, and summarize results.
 
+graph TD
+    %% Input Files
+    subgraph Inputs ["Input Data"]
+        F1([Paired-end FASTQ Files])
+        REF([Reference FASTA])
+        GB([GenBank File])
+    end
+
+    %% Step 1: Initialization
+    subgraph S1 ["1. Initialization"]
+        SS[Create Sample Sheet <br/> <i>create_samplesheet.py</i>]
+    end
+
+    %% Step 2: Quality Control & Mapping
+    subgraph S2 ["2. QC, Trimming & Mapping"]
+        FASTQC1[Read QC <br/> <i>FastQC</i>]
+        FASTP[Read Trimming & Quality Filtering <br/> <i>fastp</i>]
+        BWA[Map Reads to Reference <br/> <i>bwa-mem2</i>]
+    end
+
+    %% Step 3: Alignment Processing
+    subgraph S3 ["3. Alignment Processing & Filtering"]
+        SAMBAM[Convert SAM to BAM <br/> <i>samtools</i>]
+        SORT[Sort & Index <br/> <i>samtools</i>]
+        ALIGN_FILT[Alignment Filtering & Deduplication]
+        PRIMER[Amplicon Primer Trimming <br/> <i>iVar</i>]
+    end
+
+    %% Step 4: Database Creation
+    subgraph S4 ["4. Annotation Database"]
+        SNPEFF_DB[Build SnpEff Database <br/> <i>create_snpeff_database.py</i>]
+    end
+
+    %% Step 5: Variant Calling & Consensus
+    subgraph S5 ["5. Variant Calling & Consensus"]
+        GATK[Variant Calling <br/> <i>GATK & iVar</i> <br/> (Viral Ploidy Enforced)]
+        VAR_FILT[Variant Quality Filtering]
+        CONSENSUS[Generate Consensus Sequence]
+    end
+
+    %% Step 6: Summarization
+    subgraph S6 ["6. Annotation & Summarization"]
+        ANNOTATE[Annotate Variants <br/> <i>SnpEff / SnpSift</i>]
+        SUMMARIZE[Summarize Results & Provenance <br/> <i>summarize_result.py</i>]
+    end
+
+    %% Outputs
+    subgraph Outputs ["Final Outputs"]
+        VCF([Filtered VCF Files])
+        FASTA([Consensus FASTA])
+        CSV([Summary Table CSV])
+        JSON([Chart Data JSON])
+    end
+
+    %% Define flow
+    F1 --> SS
+    SS --> FASTP
+    FASTP --> FASTQC1
+    FASTP --> BWA
+    REF --> BWA
+    
+    BWA --> SAMBAM
+    SAMBAM --> SORT
+    SORT --> ALIGN_FILT
+    ALIGN_FILT --> PRIMER
+    
+    GB --> SNPEFF_DB
+    
+    PRIMER --> GATK
+    REF --> GATK
+    GATK --> VAR_FILT
+    VAR_FILT --> CONSENSUS
+    VAR_FILT --> ANNOTATE
+    
+    SNPEFF_DB --> ANNOTATE
+    
+    CONSENSUS --> SUMMARIZE
+    ANNOTATE --> SUMMARIZE
+    
+    VAR_FILT --> VCF
+    CONSENSUS --> FASTA
+    SUMMARIZE --> CSV
+    SUMMARIZE --> JSON
+
+    %% Styling
+    classDef inputs fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef process fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef outputs fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px;
+    
+    class F1,REF,GB inputs;
+    class VCF,FASTA,CSV,JSON outputs;
+    class SS,FASTQC1,FASTP,BWA,SAMBAM,SORT,ALIGN_FILT,PRIMER,SNPEFF_DB,GATK,VAR_FILT,CONSENSUS,ANNOTATE,SUMMARIZE process;
+    
 ## Table of Contents
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
