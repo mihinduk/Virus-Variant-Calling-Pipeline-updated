@@ -197,7 +197,7 @@ def run_snpeff_annotation(raw_vcf, sample_name, output_dir, config, reference_na
     stdout, stderr = run_command(snpeff_command)
     logging.info(f"SnpEff annotation output: {stdout}")
     logging.info(f"SnpEff annotation error: {stderr}")
-    return annotated_vcf, summary_html, summary_csv, os.path.join(output_dir, f"{sample_name}_snpEff_genes.txt")
+    return annotated_vcf, summary_html, summary_csv, os.path.join(output_dir, f"{sample_name}_snpEff_summary.genes.txt")
 
 def run_snpsift_extract(annotated_vcf, sample_name, output_dir):
     snpsift_output = os.path.join(output_dir, f"{sample_name}_snpSift.txt")
@@ -271,13 +271,19 @@ def main(argv=None):
             # Coverage calculation with quality filters from config
             coverage_file = os.path.join(output_dir, f"{sample_name}_coverage.txt")
             coverage_command = (
-                f"samtools depth -q {cov['min_base_quality']} -Q {cov['min_mapping_quality']} "
+                f"samtools depth -a -q {cov['min_base_quality']} -Q {cov['min_mapping_quality']} "
                 f"{analysis_bam} > {coverage_file}"
             )
             stdout, stderr = run_command(coverage_command)
             logging.info(f"Coverage command output: {stdout}")
             logging.info(f"Coverage command error: {stderr}")
             plot_coverage(coverage_file, output_dir)
+
+            # Flagstat for on-target read metrics
+            flagstat_file = os.path.join(output_dir, f"{sample_name}_flagstat.txt")
+            flagstat_command = f"samtools flagstat {analysis_bam} > {flagstat_file}"
+            stdout, stderr = run_command(flagstat_command)
+            logging.info(f"Flagstat output saved to {flagstat_file}")
 
             # ivar consensus with parameters from config
             pileup_command = (
@@ -289,7 +295,7 @@ def main(argv=None):
                 f"-q {cons['ivar_min_quality']} "
                 f"-t {cons['ivar_min_frequency']} "
                 f"-m {cons['ivar_min_depth']} "
-                f"-n {cons['ivar_ambiguous_char']}"
+                # -n omitted: default is N
             )
             stdout, stderr = run_command(pileup_command)
             logging.info(f"Consensus command output: {stdout}")

@@ -24,7 +24,7 @@ def main(argv=None):
         os.makedirs(output_dir)
 
     # File pattern
-    file_pattern = "*_snpEff_genes.txt"
+    file_pattern = "*_snpEff_summary.genes.txt"
 
     # Expected columns to keep
     columns_to_keep = [
@@ -68,7 +68,7 @@ def main(argv=None):
 
     # Iterate over files
     for file_path in files:
-        sample_name = os.path.basename(file_path).replace("_snpEff_genes.txt", "")
+        sample_name = os.path.basename(file_path).replace("_snpEff_summary.genes.txt", "")
         logging.info(f"Processing file: {file_path} (Sample: {sample_name})")
         
         try:

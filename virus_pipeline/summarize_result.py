@@ -1,11 +1,122 @@
 import sys
 import os
+import json
 import argparse
 import pandas as pd
 import logging
 pd.set_option('future.no_silent_downcasting', True)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def summarize_fastp(input_dir, output_file):
+    """Parse fastp JSON files for QC metrics."""
+    sample_names = []
+    reads_before = []
+    reads_after = []
+    q30_before = []
+    q30_after = []
+    duplication_rates = []
+    adapter_pcts = []
+
+    # Look for fastp JSON in sample output folders
+    for item in sorted(os.listdir(input_dir)):
+        item_path = os.path.join(input_dir, item)
+        if os.path.isdir(item_path) and item.endswith('_output'):
+            for fname in os.listdir(item_path):
+                if fname.endswith('_fastp.json'):
+                    json_path = os.path.join(item_path, fname)
+                    sample_name = fname.replace('_fastp.json', '')
+                    try:
+                        with open(json_path, 'r') as f:
+                            data = json.load(f)
+
+                        before = data['summary']['before_filtering']
+                        after = data['summary']['after_filtering']
+                        dup = data.get('duplication', {}).get('rate', 0.0)
+                        adapter = data.get('adapter_cutting', {})
+                        adapter_pct = 0.0
+                        if adapter and before['total_reads'] > 0:
+                            adapter_trimmed = adapter.get('adapter_trimmed_reads', 0)
+                            adapter_pct = round(adapter_trimmed / before['total_reads'] * 100, 2)
+
+                        sample_names.append(sample_name)
+                        reads_before.append(before['total_reads'])
+                        reads_after.append(after['total_reads'])
+                        q30_before.append(round(before.get('q30_rate', 0) * 100, 2))
+                        q30_after.append(round(after.get('q30_rate', 0) * 100, 2))
+                        duplication_rates.append(round(dup * 100, 2))
+                        adapter_pcts.append(adapter_pct)
+                    except Exception as e:
+                        logging.error(f"Error parsing fastp JSON {json_path}: {e}")
+
+    if sample_names:
+        df = pd.DataFrame({
+            'Sample': sample_names,
+            'Reads_Before_Filtering': reads_before,
+            'Reads_After_Filtering': reads_after,
+            'Pct_Q30_Before': q30_before,
+            'Pct_Q30_After': q30_after,
+            'Pct_Duplication': duplication_rates,
+            'Pct_Adapter': adapter_pcts,
+        })
+        df.to_excel(output_file, index=False)
+        logging.info(f"Fastp QC summary saved to {output_file}")
+    else:
+        logging.warning("No fastp JSON files found")
+
+
+def summarize_flagstat(input_dir, output_file):
+    """Parse samtools flagstat output files."""
+    sample_names = []
+    total_reads_list = []
+    mapped_reads_list = []
+    pct_mapped_list = []
+    properly_paired_list = []
+    pct_properly_paired_list = []
+
+    for fname in sorted(os.listdir(input_dir)):
+        if fname.endswith('_flagstat.txt'):
+            flagstat_path = os.path.join(input_dir, fname)
+            sample_name = fname.replace('_flagstat.txt', '')
+            try:
+                total_reads = 0
+                mapped_reads = 0
+                properly_paired = 0
+                with open(flagstat_path, 'r') as f:
+                    for line in f:
+                        if 'in total' in line:
+                            total_reads = int(line.split()[0])
+                        elif 'mapped (' in line and 'primary mapped' not in line:
+                            mapped_reads = int(line.split()[0])
+                        elif 'properly paired' in line:
+                            properly_paired = int(line.split()[0])
+
+                pct_mapped = round(mapped_reads / total_reads * 100, 2) if total_reads > 0 else 0
+                pct_pp = round(properly_paired / total_reads * 100, 2) if total_reads > 0 else 0
+
+                sample_names.append(sample_name)
+                total_reads_list.append(total_reads)
+                mapped_reads_list.append(mapped_reads)
+                pct_mapped_list.append(pct_mapped)
+                properly_paired_list.append(properly_paired)
+                pct_properly_paired_list.append(pct_pp)
+            except Exception as e:
+                logging.error(f"Error parsing flagstat {flagstat_path}: {e}")
+
+    if sample_names:
+        df = pd.DataFrame({
+            'Sample': sample_names,
+            'Total_Reads': total_reads_list,
+            'Mapped_Reads': mapped_reads_list,
+            'Pct_Mapped': pct_mapped_list,
+            'Properly_Paired': properly_paired_list,
+            'Pct_Properly_Paired': pct_properly_paired_list,
+        })
+        df.to_excel(output_file, index=False)
+        logging.info(f"Flagstat summary saved to {output_file}")
+    else:
+        logging.warning("No flagstat files found")
+
 
 def summarize_coverage(input_dir, output_file):
     """Fix 8: Comprehensive coverage metrics instead of average-only."""
@@ -21,6 +132,7 @@ def summarize_coverage(input_dir, output_file):
     pct_10x = []
     pct_30x = []
     pct_100x = []
+    evenness = []
 
     for file_name in sorted(os.listdir(input_dir)):
         if file_name.endswith('_coverage.txt'):
@@ -47,6 +159,12 @@ def summarize_coverage(input_dir, output_file):
                     pct_10x.append(round(float(np.sum(arr >= 10)) / total * 100, 2))
                     pct_30x.append(round(float(np.sum(arr >= 30)) / total * 100, 2))
                     pct_100x.append(round(float(np.sum(arr >= 100)) / total * 100, 2))
+                    # Evenness: 1 - Gini coefficient (1=perfectly even, 0=all reads at one position)
+                    sorted_arr = np.sort(arr)
+                    n = len(sorted_arr)
+                    cumsum = np.cumsum(sorted_arr)
+                    gini = (2.0 * np.sum((np.arange(1, n+1) * sorted_arr)) / (n * np.sum(sorted_arr))) - (n + 1) / n if np.sum(sorted_arr) > 0 else 0
+                    evenness.append(round(1.0 - gini, 4))
                 else:
                     for lst in [avg_cov, median_cov, min_cov, max_cov, std_cov,
                                 pct_1x, pct_10x, pct_30x, pct_100x]:
@@ -68,6 +186,7 @@ def summarize_coverage(input_dir, output_file):
         'Pct_Genome_10x': pct_10x,
         'Pct_Genome_30x': pct_30x,
         'Pct_Genome_100x': pct_100x,
+        'Coverage_Evenness': evenness,
     }
     coverage_df = pd.DataFrame(coverage_data)
     coverage_df.to_excel(output_file, index=False)
@@ -139,14 +258,42 @@ def main(argv=None):
         logging.error(f"Input directory {input_dir} does not exist")
         sys.exit(1)
 
+    # Fastp QC summary
+    fastp_output_file = os.path.join(output_dir, 'qc_summary.xlsx')
+    # fastp JSONs are in the parent dir's sample output folders
+    parent_dir = os.path.dirname(input_dir) if os.path.basename(input_dir) == 'output' else input_dir
+    summarize_fastp(parent_dir, fastp_output_file)
+
+    # Flagstat summary
+    flagstat_output_file = os.path.join(output_dir, 'on_target_summary.xlsx')
+    summarize_flagstat(input_dir, flagstat_output_file)
+
+    # Coverage summary
     coverage_output_file = os.path.join(output_dir, 'coverage_summary.xlsx')
     summarize_coverage(input_dir, coverage_output_file)
 
+    # FASTA summary
     fasta_output_file = os.path.join(output_dir, 'fasta_summary.xlsx')
     summarize_fasta(input_dir, fasta_output_file, database_name)
 
+    # Merge all summaries
     merged_output_file = os.path.join(output_dir, 'merged_summary.xlsx')
-    merge_excel_files(coverage_output_file, fasta_output_file, merged_output_file)
+    dfs = []
+    for f in [fastp_output_file, flagstat_output_file, coverage_output_file, fasta_output_file]:
+        if os.path.exists(f):
+            try:
+                dfs.append(pd.read_excel(f))
+            except Exception as e:
+                logging.warning(f"Could not read {f}: {e}")
+    if dfs:
+        merged = dfs[0]
+        for df in dfs[1:]:
+            merged = pd.merge(merged, df, on='Sample', how='outer')
+        merged.fillna(0, inplace=True)
+        merged.to_excel(merged_output_file, index=False)
+        logging.info(f"Merged summary saved to {merged_output_file}")
+    else:
+        logging.error("No summary files to merge")
 
 if __name__ == '__main__':
     main()

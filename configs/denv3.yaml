@@ -1,0 +1,60 @@
+virus_name: "Dengue virus serotype 3"
+genome_type: "ssRNA(+)"
+ploidy: 1
+expected_genome_size: 10707
+database_name: "denv3"
+
+fastp:
+  qualified_quality_phred: 20
+  length_required: 50
+  cut_front: true
+  cut_tail: true
+  cut_window_size: 4
+  cut_mean_quality: 20
+  detect_adapter_for_pe: true
+  correction: true
+  overlap_len_require: 30
+  threads: 4
+
+alignment_filtering:
+  min_mapping_quality: 20
+  exclude_flags: "0x904"
+
+deduplication:
+  enabled: true
+  remove_duplicates: true
+
+primer_trimming:
+  min_quality: 20
+  min_length: 50
+  sliding_window: 4
+  include_reads_no_primer: true
+
+coverage:
+  min_base_quality: 20
+  min_mapping_quality: 20
+
+consensus:
+  mpileup_max_depth: 10000
+  mpileup_min_base_quality: 0
+  mpileup_min_mapping_quality: 0
+  ivar_min_quality: 20
+  ivar_min_frequency: 0.5
+  ivar_min_depth: 20
+  ivar_ambiguous_char: "N"
+
+variant_calling:
+  ploidy: 1
+  standard_min_confidence: 30
+  min_base_quality_score: 20
+
+vcf_filtering:
+  filters:
+    LowQD:       "QD < 2.0"
+    StrandBias:  "FS > 60.0"
+    LowMQ:       "MQ < 40.0"
+    LowDepth:    "DP < 20"
+  select_pass_only: true
+
+annotation:
+  snpeff_memory: "4g"

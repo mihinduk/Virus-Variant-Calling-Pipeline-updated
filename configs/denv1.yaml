@@ -64,7 +64,7 @@ deduplication:
 # If no BED file is given, this step is skipped and logged in provenance.
 primer_trimming:
   min_quality: 20                # -q : quality threshold for sliding window
-  min_length: 30                 # -m : minimum read length after trimming
+  min_length: 50                 # -m : minimum read length after trimming
   sliding_window: 4              # -s : sliding window width
   include_reads_no_primer: true  # -e : include reads without primer sequence
 
@@ -80,11 +80,11 @@ coverage:
 # ---------------------------------------------------------------------------
 consensus:
   mpileup_max_depth: 10000       # -d : maximum read depth per position
-  mpileup_min_base_quality: 20   # -Q : minimum base quality for mpileup
-  mpileup_min_mapping_quality: 20  # -q : minimum mapping quality for mpileup
+  mpileup_min_base_quality: 0   # -Q : minimum base quality for mpileup
+  mpileup_min_mapping_quality: 0  # -q : minimum mapping quality for mpileup
   ivar_min_quality: 20           # -q : minimum quality score for consensus
   ivar_min_frequency: 0.5        # -t : frequency threshold (0.5 = majority rule)
-  ivar_min_depth: 10             # -m : minimum depth to call consensus
+  ivar_min_depth: 20             # -m : minimum depth to call consensus
   ivar_ambiguous_char: "N"       # -n : character for ambiguous/low-depth positions
 
 # ---------------------------------------------------------------------------
@@ -103,7 +103,7 @@ vcf_filtering:
     LowQD:       "QD < 2.0"       # Quality-by-depth
     StrandBias:  "FS > 60.0"      # Fisher strand bias
     LowMQ:       "MQ < 40.0"      # Mapping quality
-    LowDepth:    "DP < 10"        # Read depth
+    LowDepth:    "DP < 20"        # Read depth
   select_pass_only: true           # Keep only PASS variants for annotation
 
 # ---------------------------------------------------------------------------
