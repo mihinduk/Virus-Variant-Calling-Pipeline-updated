@@ -61,6 +61,8 @@ def main():
     parser.add_argument('--output_dir', type=str, required=True)
     parser.add_argument('--config', type=str, required=True,
                         help='Path to virus config YAML file (e.g., configs/denv1.yaml)')
+    parser.add_argument('--sample_names', type=str, default=None,
+                        help='Comma-delimited list of sample names. Must match number of FASTQ pairs.')
     parser.add_argument('--primer_bed', type=str, default=None,
                         help='BED file with primer coordinates for ivar trim. '
                              'If not provided, primer trimming is skipped.')
@@ -101,7 +103,10 @@ def main():
     # Run pipeline steps
     try:
         logging.info("Starting create_samplesheet")
-        create_samplesheet([args.input_dir, sample_sheet])
+        samplesheet_args = [args.input_dir, sample_sheet]
+        if args.sample_names:
+            samplesheet_args.extend(['--sample_names', args.sample_names])
+        create_samplesheet(samplesheet_args)
         check_file_exists(sample_sheet, "Sample sheet")
         tracker.record_step("Create sample sheet", "create_samplesheet",
                            {'input_dir': args.input_dir, 'output': sample_sheet})
@@ -293,7 +298,8 @@ def main():
 
     try:
         logging.info("Starting summarize_snpEff")
-        summarize_snpEff(['--input_dir', args.output_dir, '--output_dir', args.output_dir])
+        summarize_snpEff(['--input_dir', args.output_dir, '--output_dir', args.output_dir,
+                          '--config', args.config])
         tracker.record_step("SnpEff summary", "summarize_snpEff", {})
         logging.info("Completed summarize_snpEff")
     except Exception as e:

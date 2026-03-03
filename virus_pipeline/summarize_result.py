@@ -130,7 +130,7 @@ def summarize_coverage(input_dir, output_file):
     std_cov = []
     pct_1x = []
     pct_10x = []
-    pct_30x = []
+    pct_20x = []
     pct_100x = []
     evenness = []
 
@@ -157,7 +157,7 @@ def summarize_coverage(input_dir, output_file):
                     std_cov.append(round(float(np.std(arr)), 2))
                     pct_1x.append(round(float(np.sum(arr >= 1)) / total * 100, 2))
                     pct_10x.append(round(float(np.sum(arr >= 10)) / total * 100, 2))
-                    pct_30x.append(round(float(np.sum(arr >= 30)) / total * 100, 2))
+                    pct_20x.append(round(float(np.sum(arr >= 20)) / total * 100, 2))
                     pct_100x.append(round(float(np.sum(arr >= 100)) / total * 100, 2))
                     # Evenness: 1 - Gini coefficient (1=perfectly even, 0=all reads at one position)
                     sorted_arr = np.sort(arr)
@@ -167,12 +167,12 @@ def summarize_coverage(input_dir, output_file):
                     evenness.append(round(1.0 - gini, 4))
                 else:
                     for lst in [avg_cov, median_cov, min_cov, max_cov, std_cov,
-                                pct_1x, pct_10x, pct_30x, pct_100x]:
+                                pct_1x, pct_10x, pct_20x, pct_100x]:
                         lst.append(0)
             except Exception as e:
                 logging.error(f"Error processing coverage file {coverage_file}: {e}")
                 for lst in [avg_cov, median_cov, min_cov, max_cov, std_cov,
-                            pct_1x, pct_10x, pct_30x, pct_100x]:
+                            pct_1x, pct_10x, pct_20x, pct_100x]:
                     lst.append(0)
 
     coverage_data = {
@@ -184,7 +184,7 @@ def summarize_coverage(input_dir, output_file):
         'Std_Coverage': std_cov,
         'Pct_Genome_1x': pct_1x,
         'Pct_Genome_10x': pct_10x,
-        'Pct_Genome_30x': pct_30x,
+        'Pct_Genome_20x': pct_20x,
         'Pct_Genome_100x': pct_100x,
         'Coverage_Evenness': evenness,
     }
@@ -198,9 +198,9 @@ def summarize_fasta(input_dir, output_file, database_name):
     total_bases = []
 
     for file_name in os.listdir(input_dir):
-        if file_name.endswith(f'_{database_name}_aln.sorted.fa'):
+        if file_name.endswith('.fa') and not file_name.endswith('.fasta'):
             fasta_file = os.path.join(input_dir, file_name)
-            sample_name = file_name.replace(f'_{database_name}_aln.sorted.fa', '')
+            sample_name = file_name.replace('.fa', '')
             sample_names.append(sample_name)
 
             n_count = 0
@@ -260,9 +260,7 @@ def main(argv=None):
 
     # Fastp QC summary
     fastp_output_file = os.path.join(output_dir, 'qc_summary.xlsx')
-    # fastp JSONs are in the parent dir's sample output folders
-    parent_dir = os.path.dirname(input_dir) if os.path.basename(input_dir) == 'output' else input_dir
-    summarize_fastp(parent_dir, fastp_output_file)
+    summarize_fastp(input_dir, fastp_output_file)
 
     # Flagstat summary
     flagstat_output_file = os.path.join(output_dir, 'on_target_summary.xlsx')

@@ -58,3 +58,22 @@ vcf_filtering:
 
 annotation:
   snpeff_memory: "4g"
+
+# Transcript-to-protein name mapping for human-readable annotation
+transcript_annotations:
+  "DENV_gp1": "Polyprotein"
+  "NP_056776.2": "Polyprotein"
+  "NP_739581.2": "Anchored capsid (ancC)"
+  "NP_739591.2": "Capsid (C)"
+  "NP_739582.2": "Premembrane (prM)"
+  "YP_009164954.1": "Protein pr"
+  "NP_739592.2": "Membrane (M)"
+  "NP_739583.2": "Envelope (E)"
+  "NP_739584.2": "NS1"
+  "NP_739585.2": "NS2A"
+  "NP_739586.2": "NS2B"
+  "NP_739587.2": "NS3"
+  "NP_739588.2": "NS4A"
+  "NP_739593.2": "2K"
+  "NP_739589.2": "NS4B"
+  "NP_739590.2": "NS5"

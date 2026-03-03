@@ -6,10 +6,12 @@ import argparse
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    
+
     parser = argparse.ArgumentParser(description='Generate sample sheet from fastq files')
     parser.add_argument('directory', type=str, help='Directory containing fastq files')
     parser.add_argument('sample_sheet_file', type=str, help='Output sample sheet file')
+    parser.add_argument('--sample_names', type=str, default=None,
+                        help='Comma-separated list of sample names (must match number of FASTQ pairs)')
     args = parser.parse_args(argv)
 
     directory = args.directory
@@ -23,7 +25,11 @@ def main(argv=None):
         print(f"Error: No write permission for {os.path.dirname(sample_sheet_file)}")
         sys.exit(1)
 
-    generate_sample_sheet(directory, sample_sheet_file)
+    sample_names = None
+    if args.sample_names:
+        sample_names = [s.strip() for s in args.sample_names.split(',')]
+
+    generate_sample_sheet(directory, sample_sheet_file, sample_names)
 
 def get_fastq_files(directory):
     fastq_files = []
@@ -44,27 +50,43 @@ def find_pair(fastq, fastq_files):
                 return read1, read2
     return None, None
 
-def generate_sample_sheet(directory, sample_sheet_file):
+def generate_sample_sheet(directory, sample_sheet_file, sample_names=None):
     abs_directory = os.path.abspath(directory)
     fastq_files = get_fastq_files(abs_directory)
     if not fastq_files:
         print(f"Error: No FASTQ files found in {directory}")
         sys.exit(1)
+
+    # Collect all pairs first
+    pairs = []
+    processed = set()
+    for fastq in sorted(fastq_files):
+        if fastq in processed:
+            continue
+        read1, read2 = find_pair(fastq, fastq_files)
+        if read1 and read2:
+            pairs.append((read1, read2))
+            processed.add(read1)
+            processed.add(read2)
+
+    if not pairs:
+        print(f"Error: No valid FASTQ pairs found in {directory}")
+        sys.exit(1)
+
+    # Validate user-provided names if given
+    if sample_names:
+        if len(sample_names) != len(pairs):
+            print(f"Error: {len(sample_names)} sample names provided but {len(pairs)} FASTQ pairs found")
+            sys.exit(1)
+
     with open(sample_sheet_file, "w") as f:
         f.write("sample_name\tread1\tread2\n")
-        processed = set()
-        for fastq in fastq_files:
-            if fastq in processed:
-                continue
-            read1, read2 = find_pair(fastq, fastq_files)
-            if read1 and read2:
-                sample_name = os.path.basename(read1).split("_")[0]
-                f.write(f"{sample_name}\t{read1}\t{read2}\n")
-                processed.add(read1)
-                processed.add(read2)
-        if not processed:
-            print(f"Error: No valid FASTQ pairs found in {directory}")
-            sys.exit(1)
+        for i, (read1, read2) in enumerate(pairs):
+            if sample_names:
+                name = sample_names[i]
+            else:
+                name = os.path.basename(read1).split("_")[0]
+            f.write(f"{name}\t{read1}\t{read2}\n")
 
 if __name__ == "__main__":
     main()
