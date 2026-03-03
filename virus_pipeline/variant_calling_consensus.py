@@ -47,7 +47,7 @@ def validate_bam(bam_file):
         raise ValueError(f"BAM file {bam_file} contains no alignments")
     logging.info(f"BAM file {bam_file} validated successfully with {alignment_count} alignments")
 
-def plot_coverage(coverage_file, output_dir):
+def plot_coverage(coverage_file, output_dir, sample_name=None):
     positions = []
     depths = []
     with open(coverage_file, 'r') as file:
@@ -58,15 +58,26 @@ def plot_coverage(coverage_file, output_dir):
             positions.append(position)
             depths.append(depth)
 
-    plt.plot(positions, depths)
-    plt.xlabel('Position')
-    plt.ylabel('Coverage')
-    plt.title('Read Coverage')
-    plt.grid(True)
+    fig, ax = plt.subplots(figsize=(12, 5))
+    ax.fill_between(positions, depths, alpha=0.4, color='steelblue')
+    ax.plot(positions, depths, linewidth=0.5, color='steelblue')
 
-    coverage_plot_file = os.path.join(output_dir, os.path.splitext(os.path.basename(coverage_file))[0] + '.png')
-    plt.savefig(coverage_plot_file)
-    plt.close()
+    # 20X threshold line (ivar consensus min depth)
+    ax.axhline(y=20, color='red', linestyle='--', linewidth=1, label='20X (consensus threshold)')
+
+    ax.set_yscale('log')
+    ax.set_ylim(bottom=0.5)  # So 0-depth positions show near the bottom
+    ax.set_xlabel('Genome Position (bp)')
+    ax.set_ylabel('Read Depth (log scale)')
+    title = f'Coverage: {sample_name}' if sample_name else 'Read Coverage'
+    ax.set_title(title)
+    ax.legend(loc='upper right')
+    ax.grid(True, alpha=0.3)
+
+    coverage_plot_file = os.path.join(output_dir,
+        os.path.splitext(os.path.basename(coverage_file))[0] + '.png')
+    fig.savefig(coverage_plot_file, dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
     logging.info(f"Coverage plot generated: {coverage_plot_file}")
 
@@ -213,6 +224,100 @@ def run_snpsift_extract(annotated_vcf, sample_name, output_dir):
     logging.info(f"SnpSift extract error: {stderr}")
     return snpsift_output
 
+def create_annotation_tsv(annotated_vcf, sample_name, output_dir, config):
+    """Parse annotated VCF and create user-friendly TSV with one row per variant."""
+    transcript_map = config.get('transcript_annotations', {})
+    output_file = os.path.join(output_dir, f"{sample_name}_annotations.tsv")
+
+    header = [
+        "CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER",
+        "Total_Depth", "Allele_Frequency", "Strand_Bias", "Allelic_Depths",
+        "EFFECT", "PUTATIVE_IMPACT", "GENE_NAME", "GENE_ID",
+        "FEATURE_TYPE", "FEATURE_ID", "TRANSCRIPT_TYPE",
+        "HGVSc", "HGVSp",
+        "cDNA_POSITION_AND_LENGTH", "CDS_POSITION_AND_LENGTH",
+        "PROTEIN_POSITION_AND_LENGTH", "ERROR"
+    ]
+
+    rows = []
+    with open(annotated_vcf, 'r') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            fields = line.strip().split('\t')
+            if len(fields) < 8:
+                continue
+            chrom = fields[0]
+            pos = fields[1]
+            vid = fields[2]
+            ref = fields[3]
+            alt = fields[4]
+            qual = fields[5]
+            filt = fields[6]
+            info = fields[7]
+
+            # Parse INFO field
+            info_dict = {}
+            for item in info.split(';'):
+                if '=' in item:
+                    k, v = item.split('=', 1)
+                    info_dict[k] = v
+
+            total_depth = info_dict.get('DP', '')
+            allele_freq = info_dict.get('AF', '')
+            strand_bias = info_dict.get('FS', '')
+
+            # Get AD from FORMAT field (ref,alt depths)
+            allelic_depths = ''
+            if len(fields) > 9:
+                fmt_keys = fields[8].split(':')
+                fmt_vals = fields[9].split(':')
+                fmt_dict = dict(zip(fmt_keys, fmt_vals))
+                allelic_depths = fmt_dict.get('AD', '')
+
+            # Parse ANN field - take the FIRST annotation (highest impact)
+            ann_str = info_dict.get('ANN', '')
+            effect = impact = gene_name = gene_id = ''
+            feature_type = feature_id = transcript_type = ''
+            hgvsc = hgvsp = cdna_pos = cds_pos = protein_pos = error = ''
+
+            if ann_str:
+                annotations = ann_str.split(',')
+                if annotations:
+                    parts = annotations[0].split('|')
+                    if len(parts) >= 16:
+                        effect = parts[1]
+                        impact = parts[2]
+                        gene_name_raw = parts[3]
+                        gene_id = parts[4]
+                        feature_type = parts[5]
+                        feature_id = parts[6]
+                        transcript_type = parts[7]
+                        hgvsc = parts[9]
+                        hgvsp = parts[10]
+                        cdna_pos = parts[11]
+                        cds_pos = parts[12]
+                        protein_pos = parts[13]
+                        error = parts[15] if len(parts) > 15 else ''
+                        # Map transcript/feature ID to protein name
+                        gene_name = transcript_map.get(feature_id, gene_name_raw)
+
+            rows.append([
+                chrom, pos, vid, ref, alt, qual, filt,
+                total_depth, allele_freq, strand_bias, allelic_depths,
+                effect, impact, gene_name, gene_id,
+                feature_type, feature_id, transcript_type,
+                hgvsc, hgvsp, cdna_pos, cds_pos, protein_pos, error
+            ])
+
+    with open(output_file, 'w') as f:
+        f.write('\t'.join(header) + '\n')
+        for row in rows:
+            f.write('\t'.join(str(x) for x in row) + '\n')
+
+    logging.info(f"Annotation TSV created: {output_file} ({len(rows)} variants)")
+    return output_file
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -277,7 +382,7 @@ def main(argv=None):
             stdout, stderr = run_command(coverage_command)
             logging.info(f"Coverage command output: {stdout}")
             logging.info(f"Coverage command error: {stderr}")
-            plot_coverage(coverage_file, output_dir)
+            plot_coverage(coverage_file, output_dir, sample_name=sample_name)
 
             # Flagstat for on-target read metrics
             flagstat_file = os.path.join(output_dir, f"{sample_name}_flagstat.txt")
@@ -313,6 +418,7 @@ def main(argv=None):
             annotated_vcf, summary_html, summary_csv, summary_txt = run_snpeff_annotation(
                 filtered_vcf, sample_name, output_dir, config, database_name)
             snpsift_output = run_snpsift_extract(annotated_vcf, sample_name, output_dir)
+            annotation_tsv = create_annotation_tsv(annotated_vcf, sample_name, output_dir, config)
             logging.info(
                 f"Processing complete for {sample_name}: "
                 f"consensus={os.path.join(output_dir, consensus_fasta)}, "

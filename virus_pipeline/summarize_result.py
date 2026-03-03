@@ -118,6 +118,44 @@ def summarize_flagstat(input_dir, output_file):
         logging.warning("No flagstat files found")
 
 
+
+def summarize_dedup(input_dir, output_file):
+    """Parse dedup stats files for deduplication metrics."""
+    sample_names = []
+    pre_dedup_list = []
+    post_dedup_list = []
+    pct_dup_list = []
+
+    for fname in sorted(os.listdir(input_dir)):
+        if fname.endswith('_dedup_stats.txt'):
+            stats_path = os.path.join(input_dir, fname)
+            sample_name = fname.replace('_dedup_stats.txt', '')
+            try:
+                stats = {}
+                with open(stats_path, 'r') as f:
+                    for line in f:
+                        key, val = line.strip().split('\t')
+                        stats[key] = val
+
+                sample_names.append(sample_name)
+                pre_dedup_list.append(int(stats.get('pre_dedup_reads', 0)))
+                post_dedup_list.append(int(stats.get('post_dedup_reads', 0)))
+                pct_dup_list.append(float(stats.get('pct_duplicates', 0)))
+            except Exception as e:
+                logging.error(f"Error parsing dedup stats {stats_path}: {e}")
+
+    if sample_names:
+        df = pd.DataFrame({
+            'Sample': sample_names,
+            'Pre_Dedup_Reads': pre_dedup_list,
+            'Post_Dedup_Reads': post_dedup_list,
+            'Pct_Duplicates': pct_dup_list,
+        })
+        df.to_excel(output_file, index=False)
+        logging.info(f"Dedup summary saved to {output_file}")
+    else:
+        logging.warning("No dedup stats files found")
+
 def summarize_coverage(input_dir, output_file):
     """Fix 8: Comprehensive coverage metrics instead of average-only."""
     import numpy as np
@@ -266,6 +304,10 @@ def main(argv=None):
     flagstat_output_file = os.path.join(output_dir, 'on_target_summary.xlsx')
     summarize_flagstat(input_dir, flagstat_output_file)
 
+    # Dedup summary
+    dedup_output_file = os.path.join(output_dir, 'dedup_summary.xlsx')
+    summarize_dedup(input_dir, dedup_output_file)
+
     # Coverage summary
     coverage_output_file = os.path.join(output_dir, 'coverage_summary.xlsx')
     summarize_coverage(input_dir, coverage_output_file)
@@ -277,7 +319,7 @@ def main(argv=None):
     # Merge all summaries
     merged_output_file = os.path.join(output_dir, 'merged_summary.xlsx')
     dfs = []
-    for f in [fastp_output_file, flagstat_output_file, coverage_output_file, fasta_output_file]:
+    for f in [fastp_output_file, flagstat_output_file, dedup_output_file, coverage_output_file, fasta_output_file]:
         if os.path.exists(f):
             try:
                 dfs.append(pd.read_excel(f))

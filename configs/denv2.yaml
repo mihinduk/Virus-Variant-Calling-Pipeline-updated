@@ -2,7 +2,7 @@ virus_name: "Dengue virus serotype 2"
 genome_type: "ssRNA(+)"
 ploidy: 1
 expected_genome_size: 10723
-database_name: "denv2"
+database_name: "NC_001474.2"   # Accession number used for SnpEff database
 
 fastp:
   qualified_quality_phred: 20

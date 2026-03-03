@@ -2,7 +2,7 @@ virus_name: "Dengue virus serotype 3"
 genome_type: "ssRNA(+)"
 ploidy: 1
 expected_genome_size: 10707
-database_name: "denv3"
+database_name: "NC_001475.2"   # Accession number used for SnpEff database
 
 fastp:
   qualified_quality_phred: 20

@@ -26,7 +26,7 @@ expected_genome_size: 10735   # bp (approximate)
 # ---------------------------------------------------------------------------
 # Reference files  (override on command line with --reference_fasta / --genbank_file)
 # ---------------------------------------------------------------------------
-database_name: "denv1"        # Name used for the SnpEff database
+database_name: "NC_001477.1"   # Accession number used for SnpEff database
 
 # ---------------------------------------------------------------------------
 # Read trimming -- fastp
