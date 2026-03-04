@@ -4,7 +4,18 @@ import json
 import argparse
 import pandas as pd
 import logging
+from openpyxl import load_workbook
+from openpyxl.workbook.views import BookView
 pd.set_option('future.no_silent_downcasting', True)
+
+def fix_excel_window(filepath):
+    """Set reasonable Excel window dimensions."""
+    try:
+        wb = load_workbook(filepath)
+        wb.views = [BookView(windowWidth=19200, windowHeight=12000)]
+        wb.save(filepath)
+    except Exception as e:
+        logging.warning(f'Could not fix Excel window for {filepath}: {e}')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -60,6 +71,7 @@ def summarize_fastp(input_dir, output_file):
             'Pct_Adapter': adapter_pcts,
         })
         df.to_excel(output_file, index=False)
+        fix_excel_window(output_file)
         logging.info(f"Fastp QC summary saved to {output_file}")
     else:
         logging.warning("No fastp JSON files found")
@@ -113,6 +125,7 @@ def summarize_flagstat(input_dir, output_file):
             'Pct_Properly_Paired': pct_properly_paired_list,
         })
         df.to_excel(output_file, index=False)
+        fix_excel_window(output_file)
         logging.info(f"Flagstat summary saved to {output_file}")
     else:
         logging.warning("No flagstat files found")
@@ -152,6 +165,7 @@ def summarize_dedup(input_dir, output_file):
             'Pct_Duplicates': pct_dup_list,
         })
         df.to_excel(output_file, index=False)
+        fix_excel_window(output_file)
         logging.info(f"Dedup summary saved to {output_file}")
     else:
         logging.warning("No dedup stats files found")
@@ -228,6 +242,7 @@ def summarize_coverage(input_dir, output_file):
     }
     coverage_df = pd.DataFrame(coverage_data)
     coverage_df.to_excel(output_file, index=False)
+    fix_excel_window(output_file)
     logging.info(f"Coverage summary saved to {output_file}")
 
 def summarize_fasta(input_dir, output_file, database_name):
@@ -264,6 +279,7 @@ def summarize_fasta(input_dir, output_file, database_name):
     }
     fasta_df = pd.DataFrame(fasta_data)
     fasta_df.to_excel(output_file, index=False)
+    fix_excel_window(output_file)
     logging.info(f"FASTA summary saved to {output_file}")
 
 def merge_excel_files(coverage_file, fasta_file, output_file):
@@ -331,6 +347,7 @@ def main(argv=None):
             merged = pd.merge(merged, df, on='Sample', how='outer')
         merged.fillna(0, inplace=True)
         merged.to_excel(merged_output_file, index=False)
+        fix_excel_window(merged_output_file)
         logging.info(f"Merged summary saved to {merged_output_file}")
     else:
         logging.error("No summary files to merge")

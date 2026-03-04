@@ -224,6 +224,28 @@ def run_snpsift_extract(annotated_vcf, sample_name, output_dir):
     logging.info(f"SnpSift extract error: {stderr}")
     return snpsift_output
 
+def write_low_coverage_positions(coverage_file, output_dir, sample_name, min_depth=20):
+    """Write a file listing positions with coverage below the consensus threshold."""
+    low_cov_file = os.path.join(output_dir, f"{sample_name}_low_coverage.tsv")
+    low_cov_count = 0
+    total_positions = 0
+
+    with open(coverage_file, 'r') as fin, open(low_cov_file, 'w') as fout:
+        fout.write("CHROM\tPOSITION\tDEPTH\n")
+        for line in fin:
+            columns = line.strip().split('\t')
+            chrom = columns[0]
+            pos = int(columns[1])
+            depth = int(columns[2])
+            total_positions += 1
+            if depth < min_depth:
+                fout.write(f"{chrom}\t{pos}\t{depth}\n")
+                low_cov_count += 1
+
+    logging.info(f"Low coverage file: {low_cov_file} "
+                 f"({low_cov_count}/{total_positions} positions below {min_depth}X)")
+    return low_cov_file
+
 def create_annotation_tsv(annotated_vcf, sample_name, output_dir, config):
     """Parse annotated VCF and create user-friendly TSV with one row per variant."""
     transcript_map = config.get('transcript_annotations', {})
@@ -283,24 +305,37 @@ def create_annotation_tsv(annotated_vcf, sample_name, output_dir, config):
 
             if ann_str:
                 annotations = ann_str.split(',')
-                if annotations:
-                    parts = annotations[0].split('|')
+
+                # Try to find a specific protein annotation (not Polyprotein)
+                best_ann = None
+                for ann in annotations:
+                    parts = ann.split('|')
                     if len(parts) >= 16:
-                        effect = parts[1]
-                        impact = parts[2]
-                        gene_name_raw = parts[3]
-                        gene_id = parts[4]
-                        feature_type = parts[5]
-                        feature_id = parts[6]
-                        transcript_type = parts[7]
-                        hgvsc = parts[9]
-                        hgvsp = parts[10]
-                        cdna_pos = parts[11]
-                        cds_pos = parts[12]
-                        protein_pos = parts[13]
-                        error = parts[15] if len(parts) > 15 else ''
-                        # Map transcript/feature ID to protein name
-                        gene_name = transcript_map.get(feature_id, gene_name_raw)
+                        feat_id = parts[6]
+                        mapped_name = transcript_map.get(feat_id, '')
+                        if mapped_name and mapped_name != 'Polyprotein':
+                            best_ann = parts
+                            break
+
+                # Fall back to the first annotation if no specific protein found
+                if best_ann is None and annotations:
+                    best_ann = annotations[0].split('|')
+
+                if best_ann and len(best_ann) >= 16:
+                    effect = best_ann[1]
+                    impact = best_ann[2]
+                    gene_name_raw = best_ann[3]
+                    gene_id = best_ann[4]
+                    feature_type = best_ann[5]
+                    feature_id = best_ann[6]
+                    transcript_type = best_ann[7]
+                    hgvsc = best_ann[9]
+                    hgvsp = best_ann[10]
+                    cdna_pos = best_ann[11]
+                    cds_pos = best_ann[12]
+                    protein_pos = best_ann[13]
+                    error = best_ann[15] if len(best_ann) > 15 else ''
+                    gene_name = transcript_map.get(feature_id, gene_name_raw)
 
             rows.append([
                 chrom, pos, vid, ref, alt, qual, filt,
@@ -383,6 +418,7 @@ def main(argv=None):
             logging.info(f"Coverage command output: {stdout}")
             logging.info(f"Coverage command error: {stderr}")
             plot_coverage(coverage_file, output_dir, sample_name=sample_name)
+            write_low_coverage_positions(coverage_file, output_dir, sample_name)
 
             # Flagstat for on-target read metrics
             flagstat_file = os.path.join(output_dir, f"{sample_name}_flagstat.txt")
