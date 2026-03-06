@@ -48,7 +48,7 @@ def parse_ivar_tsv(filepath):
 
 def main():
     parser = argparse.ArgumentParser(description='Compare Pass 1 and Pass 2 variants')
-    parser.add_argument('--pass1_dir', required=True, help='Pass 1 output directory')
+    parser.add_argument('--pass1_base', required=True, help='Base directory containing pass1_denv1/, pass1_denv2/, pass1_denv3/ output dirs')
     parser.add_argument('--pass2_dir', required=True, help='Pass 2 output directory')
     parser.add_argument('--sample_list', required=True, help='Sample list TSV')
     parser.add_argument('--output_dir', required=True, help='Output directory')
@@ -77,7 +77,7 @@ def main():
     # Load all Pass 1 variants to build the shared-variant matrix
     pass1_data = {}  # sample -> list of variants
     for s in samples:
-        ann_file = os.path.join(args.pass1_dir, f"{s['name']}_annotations.tsv")
+        ann_file = os.path.join(args.pass1_base, f"pass1_{s['serotype']}", 'output', f"{s['name']}_annotations.tsv")
         if os.path.exists(ann_file):
             pass1_data[s['name']] = parse_annotation_tsv(ann_file)
         else:
