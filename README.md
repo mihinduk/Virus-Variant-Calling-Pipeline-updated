@@ -2,11 +2,7 @@
 
 This pipeline processes paired-end FASTQ files to perform variant calling and generate consensus sequences for viral genomes, specifically designed for Dengue virus (DENV1). It uses a series of bioinformatics tools to map reads, convert SAM to BAM, call variants, annotate them with SnpEff, and summarize results.
 
-### Modules 1–6: Core Pipeline
-![Pipeline Modules 1-6](docs/pipeline_modules_1-6.png)
-
-### Module 7: Self-Reference Variant Calling
-![Pipeline Module 7](docs/pipeline_module_7.png)
+![Virus Variant Calling Pipeline](docs/pipeline_figure.png)
 
 ## Table of Contents
 - [Overview](#overview)
