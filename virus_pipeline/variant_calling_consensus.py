@@ -374,6 +374,9 @@ def main(argv=None):
     parser.add_argument('--primer_bed', type=str, default=None,
                         help='BED file with primer coordinates for ivar trim. '
                              'If not provided, primer trimming is skipped.')
+    parser.add_argument('--annotation_mode', type=str, default='snpeff',
+                        choices=['snpeff', 'config'],
+                        help='Annotation mode: snpeff (default) or config (lightweight)')
     args = parser.parse_args(argv)
 
     config = load_config(args.config)
@@ -459,9 +462,15 @@ def main(argv=None):
             filtered_vcf = filter_vcf(raw_vcf, reference_fasta, sample_name, output_dir, config)
 
             # Annotate filtered variants
-            annotated_vcf, summary_html, summary_csv, summary_txt = run_snpeff_annotation(
-                filtered_vcf, sample_name, output_dir, config, database_name)
-            annotation_tsv = create_annotation_tsv(annotated_vcf, sample_name, output_dir, config)
+            if args.annotation_mode == 'config':
+                from virus_pipeline.annotate_from_config import annotate_from_config
+                annotation_tsv = annotate_from_config(
+                    filtered_vcf, reference_fasta, config, sample_name, output_dir)
+                logging.info(f"Config-based annotation complete for {sample_name}")
+            else:
+                annotated_vcf, summary_html, summary_csv, summary_txt = run_snpeff_annotation(
+                    filtered_vcf, sample_name, output_dir, config, database_name)
+                annotation_tsv = create_annotation_tsv(annotated_vcf, sample_name, output_dir, config)
             logging.info(
                 f"Processing complete for {sample_name}: "
                 f"consensus={os.path.join(output_dir, consensus_fasta)}, "
