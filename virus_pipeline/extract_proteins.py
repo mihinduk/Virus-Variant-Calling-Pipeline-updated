@@ -7,6 +7,47 @@ import sys
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
+# ---------------------------------------------------------------------------
+# Indel-aware coordinate mapping
+# ---------------------------------------------------------------------------
+
+def parse_vcf_indels(vcf_path):
+    """Parse a filtered VCF and return a sorted list of indels.
+
+    Each indel is (pos, ref_len, alt_len) where pos is 1-based.
+    """
+    indels = []
+    with open(vcf_path) as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            fields = line.strip().split('\t')
+            if len(fields) < 5:
+                continue
+            ref_allele = fields[3]
+            alt_allele = fields[4]
+            if len(ref_allele) != len(alt_allele):
+                pos = int(fields[1])
+                indels.append((pos, len(ref_allele), len(alt_allele)))
+    indels.sort()
+    return indels
+
+
+def build_offset_at(indels, ref_pos):
+    """Compute cumulative offset at a reference position from upstream indels.
+
+    For a deletion (ref_len > alt_len), the consensus is shorter: offset decreases.
+    For an insertion (alt_len > ref_len), the consensus is longer: offset increases.
+    Only indels with position < ref_pos affect the coordinate.
+    """
+    offset = 0
+    for pos, ref_len, alt_len in indels:
+        if pos >= ref_pos:
+            break
+        offset += (alt_len - ref_len)
+    return offset
+
+
 CODON_TABLE = {
     'TTT': 'F', 'TTC': 'F', 'TTA': 'L', 'TTG': 'L',
     'CTT': 'L', 'CTC': 'L', 'CTA': 'L', 'CTG': 'L',
@@ -191,11 +232,25 @@ def run_extraction(consensus_dir, config_source, reference, output_dir):
         sample = cf.replace('.fa', '').replace('.fasta', '')
         _, cons_seq = read_fasta(os.path.join(consensus_dir, cf))
 
+        # Parse indels from filtered VCF to build coordinate offset
+        indels = []
+        vcf_path = os.path.join(consensus_dir, f"{sample}_filtered.vcf")
+        if os.path.exists(vcf_path):
+            indels = parse_vcf_indels(vcf_path)
+            if indels:
+                logging.info(f"{sample}: found {len(indels)} indel(s) in VCF, "
+                             f"adjusting extraction coordinates")
+
         for prot in proteins:
             pname = prot['protein_name']
             ref_prot = ref_proteins[pname]
 
-            nuc = cons_seq[prot['start'] - 1:prot['end']]
+            # Adjust coordinates for upstream indels
+            start_offset = build_offset_at(indels, prot['start'])
+            end_offset = build_offset_at(indels, prot['end'])
+            adj_start = prot['start'] + start_offset - 1  # 0-based
+            adj_end = prot['end'] + end_offset              # exclusive
+            nuc = cons_seq[adj_start:adj_end]
             nt_len = len(nuc)
             if nt_len % 3 != 0:
                 logging.warning(f"{sample} {pname}: length {nt_len} "
