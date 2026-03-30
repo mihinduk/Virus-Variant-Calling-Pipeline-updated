@@ -176,7 +176,7 @@ def main(argv=None):
         logging.info(stderr)
 
         # Move SAM files to sam_files_dir
-        run_command(f"mv {os.path.join(sample_folder, f'{sample_name}*.sam')} {sam_files_dir}")
+        run_command(f"mv {sample_folder}/{sample_name}*.sam {sam_files_dir}")
         logging.info(f"SAM files moved to {sam_files_dir}")
 
 if __name__ == '__main__':

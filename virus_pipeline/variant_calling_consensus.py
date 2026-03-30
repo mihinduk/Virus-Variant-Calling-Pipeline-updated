@@ -99,8 +99,8 @@ def add_read_groups(bam_file, sample_name, output_dir):
         f"-o {rg_bam} {bam_file}"
     )
     stdout, stderr = run_command(rg_command)
-    print("Add read groups output:", stdout)
-    print("Add read groups error:", stderr)
+    logging.info(f"Add read groups output: {stdout}")
+    logging.info(f"Add read groups error: {stderr}")
 
     # Validate and sort the BAM file
     run_command(f"samtools sort -T {os.path.join(output_dir, f'temp_{sample_name}')} -o {rg_bam}.sorted {rg_bam}")
@@ -406,9 +406,9 @@ def main(argv=None):
         sys.exit(1)
 
     prepare_reference(reference_fasta, output_dir)
-    bam_files = glob.glob(os.path.join(input_dir, "*sorted.bam"))
+    bam_files = glob.glob(os.path.join(input_dir, "*.sorted.bam"))
     for bam_file in bam_files:
-        print("Processing:", bam_file)
+        logging.info(f"Processing: {bam_file}")
         sample_name = os.path.splitext(os.path.basename(bam_file))[0].replace('.sorted', '')
         try:
             # Add read groups before GATK
@@ -438,12 +438,13 @@ def main(argv=None):
             logging.info(f"Flagstat output saved to {flagstat_file}")
 
             # ivar consensus with parameters from config
+            consensus_prefix = os.path.join(output_dir, sample_name)
             pileup_command = (
                 f"samtools mpileup -aa -A -d {cons['mpileup_max_depth']} "
                 f"-Q {cons['mpileup_min_base_quality']} "
                 f"-q {cons['mpileup_min_mapping_quality']} "
                 f"{analysis_bam} | "
-                f"ivar consensus -p {sample_name} "
+                f"ivar consensus -p {consensus_prefix} "
                 f"-q {cons['ivar_min_quality']} "
                 f"-t {cons['ivar_min_frequency']} "
                 f"-m {cons['ivar_min_depth']} "
@@ -453,7 +454,6 @@ def main(argv=None):
             logging.info(f"Consensus command output: {stdout}")
             logging.info(f"Consensus command error: {stderr}")
             consensus_fasta = f"{sample_name}.fa"
-            os.rename(consensus_fasta, os.path.join(output_dir, consensus_fasta))
 
             # Variant calling (ploidy from config)
             raw_vcf = run_variant_calling(analysis_bam, reference_fasta, sample_name, output_dir, config)
@@ -478,7 +478,7 @@ def main(argv=None):
                 f"annotation_tsv={annotation_tsv}"
             )
         except Exception as e:
-            print(f"Error occurred during processing {sample_name}: {str(e)}")
+            logging.error(f"Error occurred during processing {sample_name}: {str(e)}")
             continue
 
 if __name__ == '__main__':
