@@ -71,7 +71,8 @@ echo -e "${BLUE}[1/3]${RESET} Running GATK HaplotypeCaller..."
 echo "  This may take 5-15 minutes..."
 echo ""
 
-gatk HaplotypeCaller \
+GATK_MEMORY="${GATK_MEMORY:-4g}"
+gatk --java-options "-Xmx${GATK_MEMORY}" HaplotypeCaller \
     -R "$REFERENCE_FASTA" \
     -I "$ANALYSIS_BAM" \
     -O "$RAW_VCF" \
@@ -99,7 +100,7 @@ gatk HaplotypeCaller \
 #             confidently call a variant.
 
 echo -e "${BLUE}[2/3]${RESET} Applying quality filters..."
-gatk VariantFiltration \
+gatk --java-options "-Xmx${GATK_MEMORY}" VariantFiltration \
     -R "$REFERENCE_FASTA" \
     -V "$RAW_VCF" \
     -O "$FILTERED_VCF" \
@@ -111,7 +112,7 @@ gatk VariantFiltration \
 
 # ─── STEP 3: Select only PASS variants ────────────────────────
 echo -e "${BLUE}[3/3]${RESET} Selecting PASS variants..."
-gatk SelectVariants \
+gatk --java-options "-Xmx${GATK_MEMORY}" SelectVariants \
     -R "$REFERENCE_FASTA" \
     -V "$FILTERED_VCF" \
     -O "$PASS_VCF" \

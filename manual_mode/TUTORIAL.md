@@ -192,6 +192,13 @@ If you've already built the database for DENV2, skip this when processing additi
 **Key parameters**:
 - Ploidy = 1 (haploid virus)
 - Four hard filters: QD, strand bias, mapping quality, depth
+- Java heap capped at `GATK_MEMORY` (default 4g)
+
+**If GATK appears to hang**: Your VM may not have enough memory. GATK's JVM will thrash into swap on low-memory systems. Check with `free -h` (Linux) or `sysctl hw.memsize` (macOS). To reduce memory usage:
+```bash
+GATK_MEMORY=2g bash 09_variant_calling.sh SRR35818859
+```
+Or edit `GATK_MEMORY` in `00_setup.sh`. Minimum recommended system RAM: 8 GB.
 
 **QC checkpoint**:
 | Metric | PASS | WARN | FAIL |

@@ -90,7 +90,7 @@ bwa-mem2 index "$SELFREF_FASTA" 2>&1 | tail -1
 
 # ─── STEP 4: Create GATK sequence dictionary ──────────────────
 echo -e "${BLUE}[4/4]${RESET} Creating sequence dictionary..."
-gatk CreateSequenceDictionary \
+gatk --java-options "-Xmx2g" CreateSequenceDictionary \
     -R "$SELFREF_FASTA" \
     2>&1 | tail -1
 

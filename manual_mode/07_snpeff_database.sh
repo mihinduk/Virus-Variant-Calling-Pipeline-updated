@@ -94,6 +94,8 @@ echo ""
 
 python3 "${PIPELINE_ROOT}/virus_pipeline/create_snpeff_database.py" \
     --genbank_file "$GENBANK_FILE" \
+    --reference_fasta "$REFERENCE_FASTA" \
+    --output_dir "$OUTPUT_DIR" \
     --database_name "$DATABASE_NAME"
 
 # ╔══════════════════════════════════════════════════════════════╗

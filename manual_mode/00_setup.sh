@@ -76,6 +76,7 @@ esac
 
 # Processing parameters
 THREADS="${THREADS:-4}"
+GATK_MEMORY="${GATK_MEMORY:-4g}"   # Max Java heap for GATK. Reduce to 2g on low-memory VMs.
 
 # Directory layout
 FASTQ_DIR="${PIPELINE_ROOT}/fastq"
@@ -95,7 +96,7 @@ CONDA_ENV_NAME="dengue_pipeline"
 # ═══════════════════════════════════════════════════════════════
 export SEROTYPE PIPELINE_ROOT SCRIPT_DIR
 export REFERENCE_FASTA GENBANK_FILE PRIMER_BED CONFIG_YAML
-export DATABASE_NAME GENOME_SIZE THREADS
+export DATABASE_NAME GENOME_SIZE THREADS GATK_MEMORY
 export FASTQ_DIR OUTPUT_DIR SAM_DIR BAM_DIR VCF_DIR
 export CONSENSUS_DIR ANNOTATION_DIR PASS2_DIR
 export CONDA_ENV_NAME
@@ -201,7 +202,7 @@ fi
 
 if [ ! -f "${REFERENCE_FASTA%.fasta}.dict" ] && [ ! -f "${REFERENCE_FASTA}.dict" ]; then
     print_warn "No sequence dictionary — will create now"
-    gatk CreateSequenceDictionary -R "$REFERENCE_FASTA" 2>/dev/null
+    gatk --java-options "-Xmx2g" CreateSequenceDictionary -R "$REFERENCE_FASTA" 2>/dev/null
     print_pass "Sequence dictionary created"
 fi
 
