@@ -366,9 +366,9 @@ def main(argv=None):
         argv = sys.argv[1:]
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_dir', type=str, help='Path to input directory containing BAM files.')
-    parser.add_argument('--reference_fasta', type=str, help='Path to reference FASTA file.')
-    parser.add_argument('--output_dir', type=str, help='Path to output directory for consensus FASTA and VCF files.')
+    parser.add_argument('--input_dir', type=str, required=True, help='Path to input directory containing BAM files.')
+    parser.add_argument('--reference_fasta', type=str, required=True, help='Path to reference FASTA file.')
+    parser.add_argument('--output_dir', type=str, required=True, help='Path to output directory for consensus FASTA and VCF files.')
     parser.add_argument('--database_name', type=str, default="denv1", help='Name of the SnpEff database (default: denv1).')
     parser.add_argument('--config', type=str, required=True, help='Path to virus config YAML file')
     parser.add_argument('--primer_bed', type=str, default=None,

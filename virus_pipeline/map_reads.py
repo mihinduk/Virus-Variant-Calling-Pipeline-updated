@@ -91,8 +91,8 @@ def main(argv=None):
         argv = sys.argv[1:]
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--samplesheet', type=str, help='Path to sample sheet with columns "sample_name", "read1", "read2".')
-    parser.add_argument('--reference', type=str, help='Path to reference FASTA file')
+    parser.add_argument('--samplesheet', type=str, required=True, help='Path to sample sheet with columns "sample_name", "read1", "read2".')
+    parser.add_argument('--reference', type=str, required=True, help='Path to reference FASTA file')
     parser.add_argument('--config', type=str, required=True, help='Path to virus config YAML file')
     args = parser.parse_args(argv)
 
